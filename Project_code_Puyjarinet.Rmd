@@ -1,0 +1,180 @@
+---
+title: "R"
+output: pdf_document
+---
+
+```{r}
+library(readr)
+df <- read_csv("Desktop/archive/Datafiniti_Amazon_Consumer_Reviews_of_Amazon_Products_May19.csv")
+```
+
+```{r}
+library(dplyr)
+library(tidyr)
+data <- select(df,"reviews.text","reviews.rating")
+View(data)
+```
+
+
+#clean
+```{r}
+library(tm)
+text <- iconv(data$reviews.text)
+text <- Corpus(VectorSource(text)) 
+inspect(text[1:5])
+```
+
+```{r}
+#Clean text for a better utilization
+
+text <- tm_map(text, removePunctuation)
+text <- tm_map(text,removeNumbers)
+
+cleanset <- tm_map(text, removeWords, stopwords('english'))
+cleanset <- tm_map(cleanset,stripWhitespace)
+inspect(cleanset[1:5])
+```
+
+#The term-Document Matrix 
+```{r}
+term_matrix <- TermDocumentMatrix (cleanset)
+term_matrix <- as.matrix(term_matrix)
+
+```
+
+
+#Visualisation
+```{r}
+w <- rowSums(term_matrix)
+w <- subset(w, w>=25)
+barplot(w ) 
+```
+
+```{r}
+library(wordcloud2)
+w <- data.frame(names(w), w)
+colnames(w) <- c('word', 'freq')
+wordcloud2(w,
+           size = 0.7,
+           shape = 'triangle',
+           rotateRatio = 0.5,
+           minSize = 1)
+```
+
+```{r}
+library("syuzhet")
+ama <- iconv(data$reviews.text)
+scores <-get_nrc_sentiment(ama)
+head(scores)
+dataFinal <- cbind(data$reviews.text,scores)
+```
+
+```{r}
+
+```
+
+
+```{r}
+barplot(colSums(scores),
+          las = 2,
+          col = rainbow(10),
+          ylab = 'Count',
+          main = 'Sentiment Scores Amazon')
+```
+
+  
+#calcule for the Com positif
+```{r}
+dataFinal2 <- data
+datacar <- data.frame(sentiment = 0,dataFinal2)
+View(datacar)
+
+for(i in seq(1,28332,by=1)){
+    if(datacar$reviews.rating[i] == 1)
+       datacar$sentiment[i] = "Negative"
+       
+     else if (datacar$reviews.rating[i] == 2)
+      datacar$sentiment[i] = "Negative"
+     
+  else if (datacar$reviews.rating[i] == 3 )
+      datacar$sentiment[i] = "Negative"
+  
+   else if (datacar$reviews.rating[i] == 4 )
+           datacar$sentiment[i] = "Positive"
+   
+ else if (datacar$reviews.rating[i] == 5 )
+    datacar$sentiment[i] = "Positive"
+
+}
+View(datacar)
+
+```
+
+```{r}
+N = 0
+P = 0
+for(i in seq(1,28332,by=1)){
+    if(datacar$sentiment[i] == "Negative")
+       N = N+1
+       
+     else if(datacar$sentiment[i] == "Positive")
+        P = P+1
+}
+
+MeanP = (P/ 28332)*100
+MeanN = (N/ 28332)*100
+
+x = c(25545,2787)
+pie(x,col=c("#AAFFAA","#FFEE44"),labels=c("Positive","Negative"),main="Repartition of positive and negative",cex=1) + text_pie(pourcentages,c("90%","10%"),cex=1) +legend(x="bottomright", legend=c("Positive","Negative"), cex=1.2,fill=c("green","yellow"))
+
+
+total = sum(x)
+pourcentages = x/total*100 ; cat("Les valeurs en % sont de :",pourcentages,"\n")
+
+text_pie = function(vector,labels=c(),cex=1) {
+     vector = vector/sum(vector)*2*pi
+     temp = c()
+     j = 0
+     l = 0
+     for (i in 1:length(vector)) {
+          k = vector[i]/2        
+          j =  j+l+k
+          l = k
+          text(cos(j)/2,sin(j)/2,labels[i],cex=cex)
+     }
+     vector = temp
+}
+# Ajouter les étiquettes
+text_pie(pourcentages,c("90%","10%"),cex=1)
+
+legend(x="bottomright", legend=c("Positive","Negative"), cex=1.2,fill=c("green","orang))
+
+```
+#Classification
+```{r}
+library("quanteda.textmodels")
+library("quanteda")
+dataPre <- select(datacar,"reviews.text","sentiment")
+
+dfmat <- dfm(tokens(dataPre$reviews.text))
+dfmat
+dfmat_train <- dfm_subset(dfmat, sub = "train")
+
+library("microbenchmark")
+microbenchmark(
+    textmodels = {
+      tmod <-  textmodel_nb(dfmat_train, dfmat_train$polarity, smooth = 1, distribution = "multinomial")
+      pred <- predict(tmod, newdata = dfmat_test)
+    },
+    fastNaiveBayes = { 
+      tmod <- fnb.multinomial(as(dfmat_train, "dgCMatrix"), y = dfmat_train$polarity, laplace = 1, sparse = TRUE)
+      pred <- predict(tmod, newdata = as(dfmat_test, "dgCMatrix"))
+    },
+    naivebayes = {
+      tmod = multinomial_naive_bayes(as(dfmat_train, "dgCMatrix"), dfmat_train$polarity, laplace = 1)
+      pred <- predict(tmod, newdata = as(dfmat_test, "dgCMatrix"))
+    },
+    times = 20
+)
+```
+
